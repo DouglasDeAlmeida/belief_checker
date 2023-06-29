@@ -1,39 +1,52 @@
+import openai
 import streamlit as st
-from streamlit_chat import message as st_message
-from transformers import BlenderbotTokenizer
-from transformers import BlenderbotForConditionalGeneration
+from streamlit_chat import message
+
+openai.api_key = st.secrets['api_secret']
+
+# This function uses the OpenAI Completion API to generate a 
+# response based on the given prompt. The temperature parameter controls 
+# the randomness of the generated response. A higher temperature will result 
+# in more random responses, 
+# while a lower temperature will result in more predictable responses.
+def generate_response(prompt):
+    completions = openai.Completion.create (
+        engine="text-davinci-003",
+        prompt=prompt,
+        max_tokens=1024,
+        n=1,
+        stop=None,
+        temperature=0.5,
+    )
+
+    message = completions.choices[0].text
+    return message
 
 
-@st.experimental_singleton
-def get_models():
-    # it may be necessary for other frameworks to cache the model
-    # seems pytorch keeps an internal state of the conversation
-    model_name = "facebook/blenderbot-400M-distill"
-    tokenizer = BlenderbotTokenizer.from_pretrained(model_name)
-    model = BlenderbotForConditionalGeneration.from_pretrained(model_name)
-    return tokenizer, model
+st.title("🤖 chatBot : openAI GPT-3 + Streamlit")
 
 
-if "history" not in st.session_state:
-    st.session_state.history = []
+if 'generated' not in st.session_state:
+    st.session_state['generated'] = []
 
-st.title("Hello Chatbot")
-
-
-def generate_answer():
-    tokenizer, model = get_models()
-    user_message = st.session_state.input_text
-    inputs = tokenizer(st.session_state.input_text, return_tensors="pt")
-    result = model.generate(**inputs)
-    message_bot = tokenizer.decode(
-        result[0], skip_special_tokens=True
-    )  # .replace("<s>", "").replace("</s>", "")
-
-    st.session_state.history.append({"message": user_message, "is_user": True})
-    st.session_state.history.append({"message": message_bot, "is_user": False})
+if 'past' not in st.session_state:
+    st.session_state['past'] = []
 
 
-st.text_input("Talk to the bot", key="input_text", on_change=generate_answer)
+def get_text():
+    input_text = st.text_input("You: ","Hello, how are you?", key="input")
+    return input_text 
 
-for i, chat in enumerate(st.session_state.history):
-    st_message(**chat, key=str(i)) #unpacking
+
+user_input = get_text()
+
+if user_input:
+    output = generate_response(user_input)
+    st.session_state.past.append(user_input)
+    st.session_state.generated.append(output)
+
+if st.session_state['generated']:
+
+    for i in range(len(st.session_state['generated'])-1, -1, -1):
+        message(st.session_state["generated"][i], key=str(i))
+        message(st.session_state['past'][i], is_user=True, key=str(i) + '_user')
